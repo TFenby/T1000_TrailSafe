@@ -11,16 +11,17 @@
      int32_t lastGpsLatitude = 0;
      int32_t lastGpsLongitude = 0;
 --- a/src/modules/PositionModule.cpp	2026-11-02 15:27:52.423851879 -0500
-+++ b/src/modules/PositionModule.cpp	2026-11-02 15:28:09.258264386 -0500
-@@ -493,6 +493,7 @@
++++ b/src/modules/PositionModule.cpp	2026-11-02 16:22:15.462927567 -0500
+@@ -492,6 +492,8 @@
+                         1000U);
              service->sendClientNotification(notification);
          }
++        if (!sleepOnNextExecution) // a send while the sleep is already pending (and possibly vetoed) keeps its deadline
++            sleepArmedMs = millis();
          sleepOnNextExecution = true;
-+        sleepArmedMs = millis();
          LOG_DEBUG("Start next execution in 5s, then sleep");
          setIntervalFromNow(FIVE_SECONDS_MS);
-     }
-@@ -547,10 +548,19 @@
+@@ -547,10 +549,19 @@
  int32_t PositionModule::runOnce()
  {
      if (sleepOnNextExecution == true) {
