@@ -1,0 +1,36 @@
+--- a/src/platform/nrf52/main-nrf52.cpp	2026-11-02 15:27:29.263676224 -0500
++++ b/src/platform/nrf52/main-nrf52.cpp	2026-11-02 15:27:38.780335193 -0500
+@@ -31,6 +31,7 @@
+ #include "Nrf52SaadcLock.h"
+ #include "SPILock.h"
+ #include "concurrency/LockGuard.h"
++#include "concurrency/OSThread.h"
+ #include "flash/flash_nrf5x.h"
+ #include <hal/nrf_lpcomp.h>
+ 
+@@ -538,7 +539,25 @@
+                    meshtastic_Config_DeviceConfig_Role_TAK_TRACKER, meshtastic_Config_DeviceConfig_Role_SENSOR) &&
+          config.power.is_power_saving == true)) {
+         sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
++#ifdef BUTTON_PIN
++        // Wait on mainDelay rather than delay(): the user button ISR interrupts it, so a press ends the sleep
++        // early. Anything else that interrupts it (a stale give, another ISR) just goes back to sleep.
++#ifdef BUTTON_ACTIVE_LOW
++        const int pressed = BUTTON_ACTIVE_LOW ? LOW : HIGH;
++#else
++        const int pressed = LOW;
++#endif
++        const uint32_t buttonPin = config.device.button_gpio ? config.device.button_gpio : BUTTON_PIN;
++        const uint32_t sleepStart = millis();
++        uint32_t remaining;
++        while ((remaining = Throttle::remainingMs(sleepStart, msecToWake)) > 0) {
++            concurrency::mainDelay.delay(remaining);
++            if (digitalRead(buttonPin) == pressed)
++                break;
++        }
++#else
+         delay(msecToWake);
++#endif
+         NVIC_SystemReset();
+     } else {
+         // Resume on user button press
