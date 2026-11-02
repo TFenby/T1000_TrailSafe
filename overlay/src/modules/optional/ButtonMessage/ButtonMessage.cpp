@@ -14,6 +14,22 @@
 
 static const char *messagesFile = "/prefs/cannedConf.proto"; // same file and proto as the stock CannedMessageModule
 
+// playTones() and ToneDuration live in buzz.cpp without a header entry; mirrored here verbatim.
+struct ToneDuration {
+    int frequency_khz;
+    int duration_ms;
+};
+void playTones(const ToneDuration *tone_durations, int size);
+
+// Morse-ish tones: B3 like the stock beep; a 1 Hz note is a rest (nRF52 tone() ignores anything under 20 Hz).
+// playTones already waits 1.3x each note, so a 1-unit rest after a dot or dash gives a clear gap.
+static const int U = BUTTON_MESSAGE_MORSE_UNIT_MS, B3 = 247, REST = 1;
+static const ToneDuration SENT[] = {{B3, U}, {REST, U}, {B3, U}};                                // ..
+static const ToneDuration SENT_CRITICAL[] = {{B3, 3 * U}, {REST, U}, {B3, 3 * U}};               // --
+static const ToneDuration ACKED[] = {{B3, 3 * U}, {REST, U}, {B3, 3 * U}, {REST, U}, {B3, U}};   // --. (G, good)
+static const ToneDuration FAILED[] = {{B3, 7 * U}, {REST, 4 * U}, {B3, 7 * U}}; // two 7-unit tones, ~7 units apart
+#define PLAY(m) playTones(m, sizeof(m) / sizeof(m[0]))
+
 extern ButtonThread *UserButtonThread; // defined in input/InputBroker.cpp; no header declares it
 ButtonMessageModule *buttonMessageModule;
 
@@ -129,13 +145,13 @@ void ButtonMessageModule::perform(bm::Action a)
         if (sendToFavorites(current) == 0) {
             LOG_WARN("ButtonMessage: no favorite node to send to");
             logic.abort();
-            playLongBeep();
+            PLAY(FAILED);
             break;
         }
-        if (a == bm::Action::SEND)
-            playBeep();
+        if (logic.critical)
+            PLAY(SENT_CRITICAL);
         else
-            playBoop();
+            PLAY(SENT);
         service->refreshLocalMeshNode();
         service->trySendPosition(NODENUM_BROADCAST, false); // stock position broadcast on the configured position channel
         break;
@@ -162,8 +178,7 @@ void ButtonMessageModule::perform(bm::Action a)
         break;
     case bm::Action::TONE_ACK:
         nPending = 0;
-        playBeep();
-        playBeep();
+        PLAY(ACKED);
         break;
     case bm::Action::NODEINFO_FAIL:
         if (nodeInfoModule && nakNode)
@@ -172,7 +187,7 @@ void ButtonMessageModule::perform(bm::Action a)
     case bm::Action::TONE_FAIL:
         if (logic.state == bm::State::IDLE)
             nPending = 0;
-        playLongBeep();
+        PLAY(FAILED);
         break;
     }
 }

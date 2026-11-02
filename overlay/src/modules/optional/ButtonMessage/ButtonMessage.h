@@ -27,6 +27,9 @@ void setupButtonMessage();
 #ifndef BUTTON_MESSAGE_CLICK_MS
 #define BUTTON_MESSAGE_CLICK_MS 250 // max gap between presses of one gesture (stock value); raise if multi-press is fiddly
 #endif
+#ifndef BUTTON_MESSAGE_MORSE_UNIT_MS
+#define BUTTON_MESSAGE_MORSE_UNIT_MS 80 // one morse unit: dot length, gap between elements
+#endif
 
 /**
  * Canned messages for screenless devices. N presses (N >= 2) sends canned message N-1 as a direct message to every

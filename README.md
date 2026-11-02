@@ -27,14 +27,17 @@ position sharing enabled.
 
 ### Tones
 
+Morse notation: `.` is one unit, `-` is three. One unit is 80 ms (`BUTTON_MESSAGE_MORSE_UNIT_MS`).
+
 | Tone | Meaning |
 |---|---|
-| one short beep | message sent |
-| short boop | `!` message resent |
-| two short beeps | a favorite received it |
-| one long beep | not delivered: no favorites, no key for the favorite yet, the mesh rejected it, or nobody acked within a minute. For a `!` message the resends continue. |
+| `..` | message sent |
+| `--` | `!` message sent or resent |
+| `--.` (G, for "good") | a favorite received it |
+| two 7-unit tones, 7 units apart | not delivered: no favorites, no key for the favorite yet, the mesh rejected it, or nobody acked within a minute. For a `!` message the resends continue. |
 
-Tones follow the device's buzzer mode setting.
+Tones follow the device's buzzer mode setting. The stock single press, and stock actions for unconfigured press counts,
+keep their stock sounds.
 
 ## Device setup
 
@@ -66,7 +69,7 @@ Tones follow the device's buzzer mode setting.
   your group can read: turn position off on the primary channel and add a private secondary channel with position
   precision set to precise, on both devices.
 - **Direct messages are encrypted to the favorite's public key.** The tracker needs the favorite's key, which it
-  learns when the nodes first see each other. If it is missing you get a long beep; the tracker then asks for the key,
+  learns when the nodes first see each other. If it is missing you get the not-delivered tone; the tracker then asks for the key,
   so the next attempt works.
 
 ## Flashing
