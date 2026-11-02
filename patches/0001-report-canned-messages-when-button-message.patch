@@ -1,0 +1,13 @@
+diff --git a/src/main.cpp b/src/main.cpp
+index d9f4818..305c32d 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1335,7 +1335,7 @@ extern meshtastic_DeviceMetadata getDeviceMetadata()
+     deviceMetadata.excluded_modules |= meshtastic_ExcludedModules_TELEMETRY_CONFIG;
+ #endif
+ // Option to explicitly include canned messages for edge cases, e.g. niche graphics
+-#if ((!HAS_SCREEN || NO_EXT_GPIO) || MESHTASTIC_EXCLUDE_CANNEDMESSAGES) && !defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS)
++#if ((!HAS_SCREEN || NO_EXT_GPIO) || MESHTASTIC_EXCLUDE_CANNEDMESSAGES) && !defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS) && !defined(BUTTON_MESSAGE)
+     deviceMetadata.excluded_modules |= meshtastic_ExcludedModules_CANNEDMSG_CONFIG;
+ #endif
+ #if NO_EXT_GPIO || MESHTASTIC_EXCLUDE_EXTERNALNOTIFICATION

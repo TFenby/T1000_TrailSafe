@@ -1,0 +1,77 @@
+# Weekly: re-apply the overlay and patches to the newest upstream Meshtastic release, build, and open a PR.
+# A PR marked "build FAILED" is the signal that the overlay or a patch needs a manual fix on that branch.
+name: upstream
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      stable_only:
+        description: Ignore prereleases
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Find newest upstream release
+        id: latest
+        run: |
+          filter='select(.draft|not)'
+          [ "${{ inputs.stable_only }}" = "true" ] && filter="$filter | select(.prerelease|not)"
+          tag=$(gh api 'repos/meshtastic/firmware/releases?per_page=30' --jq "[.[] | $filter][0].tag_name")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ "$tag" = "$(cat UPSTREAM_REF)" ]; then
+            echo "Already at $tag"; echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --heads origin "upstream/$tag" >/dev/null; then
+            echo "Branch upstream/$tag already exists"; echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "New upstream release: $tag"; echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.latest.outputs.skip == 'false'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - if: steps.latest.outputs.skip == 'false'
+        uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: pio-${{ steps.latest.outputs.tag }}
+      - name: Bump, test and build
+        if: steps.latest.outputs.skip == 'false'
+        id: build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          echo "${{ steps.latest.outputs.tag }}" > UPSTREAM_REF
+          { g++ -std=c++17 -Wall -Wextra -Werror -I overlay/src/modules/optional/ButtonMessage test/test_logic.cpp -o /tmp/test_logic && /tmp/test_logic && ./build.sh; } 2>&1 | tee build.log
+      - if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: trailsafe-${{ steps.latest.outputs.tag }}
+          path: dist/*.uf2
+      - name: Open pull request
+        if: steps.latest.outputs.skip == 'false'
+        run: |
+          tag="${{ steps.latest.outputs.tag }}"
+          run="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "upstream/$tag"
+          git add UPSTREAM_REF
+          git commit -m "Upstream $tag"
+          git push -u origin "upstream/$tag"
+          if [ "${{ steps.build.outcome }}" = "success" ]; then
+            printf 'Build **OK** against %s. UF2 is attached to [this run](%s).\n' "$tag" "$run" > body.md
+          else
+            printf 'Build **FAILED** against %s ([log](%s)). Fix the overlay or patches on this branch.\n\n```\n' "$tag" "$run" > body.md
+            tail -40 build.log >> body.md
+            printf '```\n' >> body.md
+          fi
+          gh pr create --base master --head "upstream/$tag" --title "Upstream $tag" --body-file body.md
