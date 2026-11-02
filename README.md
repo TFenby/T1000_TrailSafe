@@ -72,6 +72,25 @@ keep their stock sounds.
   learns when the nodes first see each other. If it is missing you get the not-delivered tone; the tracker then asks for the key,
   so the next attempt works.
 
+### Power saving
+
+For long battery life, use the stock tracker power saving:
+
+    meshtastic --set device.role TRACKER --set power.is_power_saving true --set position.position_broadcast_secs 900
+
+After each position broadcast the tracker sleeps with the radio and GPS off for `position_broadcast_secs`, then
+reboots and sends again. With this firmware:
+
+- **A press wakes it.** Pressing the button during the sleep reboots the tracker straight away instead of at the end
+  of the interval. The press only wakes it: presses in the first 10 s after boot are ignored, so press again for a
+  message once it is up.
+- **It stays awake until a delivery is resolved.** While a message waits for its acknowledgement it does not sleep:
+  up to a minute for a normal message, and for a `!` message until a favorite acks or the resends run out (about two
+  hours). If anything holds the sleep off for a whole broadcast interval, the tracker skips that sleep and tries
+  again after its next position broadcast.
+- **Low battery still wins.** The low-battery shutdown waits at most 30 s for a pending delivery, then shuts down
+  anyway.
+
 ## Flashing
 
 With the T1000-E plugged in by USB, hold the button for about three seconds until a USB drive appears, then copy the
@@ -99,6 +118,13 @@ The host-side logic test runs without PlatformIO:
 - `overlay/variants/nrf52840/trailsafe/platformio.ini`: the build environment, extending the stock T1000-E one.
 - `patches/0001-…`: one `#if` line in `src/main.cpp` so the firmware reports the canned-message settings as
   available, which makes the phone apps show the editor for a screenless device.
+- `patches/0002-…`: nRF52 power-saving tracker sleep ends on a button press.
+- `patches/0003-…`: the tracker's post-broadcast sleep waits while the radio or a module (ButtonMessage, awaiting an
+  ack) vetoes it, bounded by one broadcast interval.
+- `patches/0004-…`: T1000-E sleep power: the GNSS backup supply stays on through a timed sleep for a hot start, and the
+  accelerometer rail and the sensor pins are released (`variant_shutdown()`).
+
+0002–0004 are general fixes written to be offered upstream.
 
 Timing defaults (`BUTTON_MESSAGE_*` in `ButtonMessage.h`) can be overridden with `-D` flags in the env ini.
 
