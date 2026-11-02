@@ -1,0 +1,38 @@
+--- a/src/sleep.cpp	2026-11-02 15:28:34.983384850 -0500
++++ b/src/sleep.cpp	2026-11-02 15:28:40.049214169 -0500
+@@ -271,13 +271,15 @@
+ #endif
+ 
+ #if defined(TRACKER_T1000_E) || defined(MESH_TRACKER_X1)
+-    digitalWrite(GPS_VRTC_EN, LOW);
++    // A timed sleep keeps the GNSS backup (VRTC) domain powered, so the receiver hot-starts on wake from the
++    // software RTC mode the GPS driver just parked it in. Only a shutdown cuts it.
++    if (msecToWake == portMAX_DELAY)
++        digitalWrite(GPS_VRTC_EN, LOW);
+     digitalWrite(PIN_GPS_RESET, LOW);
+     digitalWrite(GPS_SLEEP_INT, LOW);
+     digitalWrite(GPS_RTC_INT, LOW);
+ #ifdef GPS_RESETB_OUT
+-    pinMode(GPS_RESETB_OUT, OUTPUT);
+-    digitalWrite(GPS_RESETB_OUT, LOW);
++    pinMode(GPS_RESETB_OUT, INPUT); // receiver output: release it rather than drive against it
+ #endif
+ 
+ #ifdef BUZZER_EN_PIN
+--- a/variants/nrf52840/tracker-t1000-e/variant.cpp	2026-11-02 15:28:34.984384816 -0500
++++ b/variants/nrf52840/tracker-t1000-e/variant.cpp	2026-11-02 15:28:43.629094044 -0500
+@@ -61,3 +61,14 @@
+ 
+     pinMode(GPS_RESETB_OUT, INPUT_PULLUP);
+ }
++
++// Called from cpuDeepSleep() after Wire.end(), for timed sleep and shutdown alike; initVariant() undoes it on the
++// reboot. sleep.cpp has already cut the sensor (PIN_3V3_EN), buzzer and GPS rails and turned the LED off.
++void variant_shutdown()
++{
++    digitalWrite(PIN_3V3_ACC_EN, LOW); // accelerometer rail, after I2C is released
++    pinMode(QMA_6100P_INT_PIN, INPUT);
++    // Seeed documents P0.04 as an analog VCC sense input, Meshtastic drives it as a sensor enable: release it, which is
++    // safe either way and cannot back-feed the sensor rail that is now off.
++    pinMode(T1000X_SENSOR_EN_PIN, INPUT);
++}
