@@ -5,6 +5,7 @@ void setupButtonMessage();
 
 #ifdef BUTTON_MESSAGE
 #include "ButtonMessageLogic.h"
+#include "Observer.h"
 #include "SinglePortModule.h"
 #include "concurrency/OSThread.h"
 #include "mesh/generated/meshtastic/cannedmessages.pb.h"
@@ -57,8 +58,12 @@ class ButtonMessageModule : public SinglePortModule, private concurrency::OSThre
     uint8_t sendToFavorites(const char *text);
     void loadMessages();
     bool saveMessages();
+    // Power saving: hold off deep sleep (radio off) while a delivery is unresolved
+    int preflightSleepCb(void *) { return logic.state != bm::State::IDLE; }
 
     bm::Logic logic;
+    CallbackObserver<ButtonMessageModule, void *> preflightSleepObserver =
+        CallbackObserver<ButtonMessageModule, void *>(this, &ButtonMessageModule::preflightSleepCb);
     meshtastic_CannedMessageModuleConfig messages = meshtastic_CannedMessageModuleConfig_init_zero;
     char current[sizeof(messages.messages)] = {0}; // text of the message in flight, for resends
     volatile uint8_t pendingClicks = 0;             // set by the button callbacks, possibly in ISR context

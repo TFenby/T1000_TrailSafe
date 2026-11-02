@@ -11,6 +11,7 @@
 #include "mesh-pb-constants.h"
 #include "modules/ExternalNotificationModule.h"
 #include "modules/NodeInfoModule.h"
+#include "sleep.h"
 
 static const char *messagesFile = "/prefs/cannedConf.proto"; // same file and proto as the stock CannedMessageModule
 
@@ -43,6 +44,7 @@ ButtonMessageModule::ButtonMessageModule()
       logic(BUTTON_MESSAGE_BOOT_GUARD_MS, BUTTON_MESSAGE_ACK_TIMEOUT_MS, BUTTON_MESSAGE_RETRY_MS, BUTTON_MESSAGE_MAX_ATTEMPTS)
 {
     loadMessages();
+    preflightSleepObserver.observe(&preflightSleep);
     if (moduleConfig.canned_message.enabled) {
         LOG_INFO("ButtonMessage enabled: '%s'", messages.messages);
     } else {
