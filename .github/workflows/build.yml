@@ -2,7 +2,6 @@ name: build
 on:
   push:
     branches: [master]
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -28,8 +27,16 @@ jobs:
           name: trailsafe-${{ github.sha }}
           path: dist/*.uf2
           if-no-files-found: error
+      # Every push to master (including a merged upstream-sync PR) becomes a release: <upstream tag>-<overlay commit>,
+      # marked pre-release when the upstream Meshtastic release is.
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.uf2 --generate-notes
+        run: |
+          upstream=$(cat UPSTREAM_REF)
+          tag="$upstream-$(git rev-parse --short HEAD)"
+          pre=$(gh api "repos/meshtastic/firmware/releases/tags/$upstream" --jq '.prerelease' 2>/dev/null || echo false)
+          [ "$pre" = "true" ] && flag=--prerelease || flag=
+          gh release create "$tag" dist/*.uf2 $flag --title "TrailSafe $tag" --generate-notes \
+            --notes "Meshtastic [$upstream](https://github.com/meshtastic/firmware/releases/tag/$upstream) + TrailSafe overlay $(git rev-parse --short HEAD). Flash the .uf2 per the README."

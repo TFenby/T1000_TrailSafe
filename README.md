@@ -104,7 +104,8 @@ Timing defaults (`BUTTON_MESSAGE_*` in `ButtonMessage.h`) can be overridden with
 The `upstream` workflow runs weekly (and on demand). When Meshtastic publishes a newer release tag (prereleases
 included; run it with *stable_only* to ignore them), it bumps `UPSTREAM_REF` on a branch, builds, and opens a pull
 request with the UF2 attached to the run. A PR marked **build FAILED** means the overlay or the patch no longer fits
-upstream: fix it on that branch, push, and merge. Tagging `master` with `v*` publishes a GitHub release with the UF2.
+upstream: fix it on that branch, push, and merge. Every push to `master`, including merging a sync PR, publishes a GitHub release named
+`<upstream tag>-<overlay commit>` with the UF2 attached, marked pre-release whenever the upstream Meshtastic release is.
 
 ## License
 
