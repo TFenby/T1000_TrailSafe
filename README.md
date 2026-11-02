@@ -31,10 +31,10 @@ Morse notation: `.` is one unit, `-` is three. One unit is 80 ms (`BUTTON_MESSAG
 
 | Tone | Meaning |
 |---|---|
-| `..` | message sent |
-| `--` | `!` message sent or resent |
+| `..` (I, "info") | message sent |
+| `--` (M, "mayday") | `!` message sent or resent |
 | `--.` (G, for "good") | a favorite received it |
-| two 7-unit tones, 7 units apart | not delivered: no favorites, no key for the favorite yet, the mesh rejected it, or nobody acked within a minute. For a `!` message the resends continue. |
+| two 7-unit tones, 7 units apart (intentionally invalid) | not delivered: no favorites, no key for the favorite yet, the mesh rejected it, or nobody acked within a minute. For a `!` message the resends continue. |
 
 Tones follow the device's buzzer mode setting. The stock single press, and stock actions for unconfigured press counts,
 keep their stock sounds.
