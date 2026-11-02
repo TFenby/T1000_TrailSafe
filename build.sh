@@ -10,7 +10,8 @@ if [ "$(git -C upstream describe --tags --exact-match 2>/dev/null || true)" != "
     rm -rf upstream
     git clone -q --depth 1 --branch "$REF" https://github.com/meshtastic/firmware upstream
 fi
-git -C upstream checkout -q -- . && git -C upstream clean -qfd # drop the previous overlay; .pio/ is gitignored and survives
+# drop the previous overlay and patches; reset --hard because apply --3way stages into the index. .pio/ survives.
+git -C upstream reset -q --hard && git -C upstream clean -qfd
 cp -r overlay/. upstream/
 for p in patches/*.patch; do
     git -C upstream apply --3way "../$p"
