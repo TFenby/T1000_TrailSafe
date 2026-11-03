@@ -135,7 +135,10 @@ The host-side logic test runs without PlatformIO:
 
 0002–0004 are general fixes written to be offered upstream.
 
-Timing defaults (`BUTTON_MESSAGE_*` in `ButtonMessage.h`) can be overridden with `-D` flags in the env ini.
+Timing defaults (`BUTTON_MESSAGE_*` in `ButtonMessage.h`) can be overridden with `-D` flags in the env ini. Bench
+builds can add `-DBUTTON_MESSAGE_FAKE_WAKE` (a timed wake behaves like a button wake) and
+`-DBUTTON_MESSAGE_FAKE_PRESSES=2` (that many presses are emulated right after the ready tone), for example through
+`PLATFORMIO_BUILD_FLAGS`; neither is set in release builds.
 
 ## Keeping up with upstream
 

@@ -39,6 +39,9 @@ ButtonMessageModule *buttonMessageModule;
 static bool wokeByButton()
 {
 #ifdef ARCH_NRF52
+#ifdef BUTTON_MESSAGE_FAKE_WAKE // bench builds: a timed wake behaves like a button wake
+    return trackerWakeCause != TRACKER_WAKE_NONE;
+#endif
     return trackerWakeCause == TRACKER_WAKE_BUTTON;
 #else
     return false;
@@ -77,6 +80,10 @@ void ButtonMessageModule::sayReady()
     pendingClicks = 0;
     LOG_INFO("ButtonMessage: woken by the button, listening");
     PLAY(READY);
+#ifdef BUTTON_MESSAGE_FAKE_PRESSES // bench builds: emulate this many presses right after the tone
+    pendingClicks = BUTTON_MESSAGE_FAKE_PRESSES;
+    LOG_INFO("ButtonMessage: emulating %u presses", (unsigned)BUTTON_MESSAGE_FAKE_PRESSES);
+#endif
 }
 
 void ButtonMessageModule::loadMessages()
