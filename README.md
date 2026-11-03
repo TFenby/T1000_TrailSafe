@@ -92,11 +92,11 @@ reboots and sends again. With this firmware:
   again after its next position broadcast.
 - **Low battery still wins.** The low-battery shutdown waits at most 30 s for a pending delivery, then shuts down
   anyway.
-- **Each wake is a GPS hot start.** The GNSS backup supply stays on through the sleep, so the receiver keeps its clock
-  and ephemeris: on the bench it had a fix 1–9 s after waking, every cycle. Stock Meshtastic then keeps the GPS on for
-  another 20 s to refresh the ephemeris before it publishes, so a wake cycle is about 35 s awake. Setting
-  `position.gps_update_interval` to 15 shortens that hold to 5 s, and 10 or less drops it; the price is an occasional
-  slower warm start once the stored ephemeris ages out after a few hours. Not measured here.
+- **The GNSS backup supply stays on through the sleep**, so the receiver keeps its clock and, while it lasts, its
+  ephemeris; on the bench a fix came 1–9 s after waking when the sky was good, and minutes when it was not. Once the
+  fix is in, the position goes out and the tracker is asleep about 4 s later: stock Meshtastic would first hold the
+  GPS on for 20 s to refresh ephemeris, wait another 5 s, and rewrite all five settings files (about 4 s); this
+  firmware skips the hold on a power-saving tracker, waits 1 s, and saves only the node database and device state.
 
 ## Flashing
 
@@ -128,10 +128,13 @@ The host-side logic test runs without PlatformIO:
 - `patches/0002-…`: nRF52 power-saving tracker sleep ends on a button press, and the boot that follows knows whether
   the button or the timer ended it (`trackerWakeCause`, kept in a retained register across the reset).
 - `patches/0003-…`: the tracker's post-broadcast sleep waits while the radio or a module (ButtonMessage, awaiting an
-  ack) vetoes it, bounded by one broadcast interval.
+  ack) vetoes it, bounded by one broadcast interval; the sleep is armed 1 s after the send instead of 5 s, and only
+  the node database and device state are saved on the way down.
 - `patches/0004-…`: T1000-E sleep power: the GNSS backup supply stays on through a timed sleep, as Seeed's own
   firmware keeps it, so the receiver hot-starts on wake; the accelerometer rail and the sensor pins are released
   (`variant_shutdown()`).
+- `patches/0005-…`: GPS: a power-saving tracker publishes on the first fix instead of holding the receiver on for 20 s
+  of ephemeris refresh, and the probe cache is only rewritten when it changed (upstream rewrote it every boot).
 
 0002–0004 are general fixes written to be offered upstream.
 

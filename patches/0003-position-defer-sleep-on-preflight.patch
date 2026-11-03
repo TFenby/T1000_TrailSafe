@@ -1,27 +1,24 @@
---- a/src/modules/PositionModule.h	2026-11-02 15:27:52.424851843 -0500
-+++ b/src/modules/PositionModule.h	2026-11-02 15:27:55.249752582 -0500
-@@ -17,6 +17,9 @@
-     /// We limit our GPS broadcasts to a max rate
-     uint32_t lastGpsSend = 0;
- 
-+    /// When a power-saving tracker armed its post-send deep sleep, to bound how long a preflight veto defers it
-+    uint32_t sleepArmedMs = 0;
-+
-     // Store the latest good lat / long
-     int32_t lastGpsLatitude = 0;
-     int32_t lastGpsLongitude = 0;
---- a/src/modules/PositionModule.cpp	2026-11-02 15:27:52.423851879 -0500
-+++ b/src/modules/PositionModule.cpp	2026-11-02 16:22:15.462927567 -0500
-@@ -492,6 +492,8 @@
+diff --git a/src/modules/PositionModule.cpp b/src/modules/PositionModule.cpp
+index ae271e2..dfc5ebb 100644
+--- a/src/modules/PositionModule.cpp
++++ b/src/modules/PositionModule.cpp
+@@ -492,9 +492,13 @@ bool PositionModule::sendOurPosition(NodeNum dest, bool wantReplies, uint8_t cha
                          1000U);
              service->sendClientNotification(notification);
          }
 +        if (!sleepOnNextExecution) // a send while the sleep is already pending (and possibly vetoed) keeps its deadline
 +            sleepArmedMs = millis();
          sleepOnNextExecution = true;
-         LOG_DEBUG("Start next execution in 5s, then sleep");
-         setIntervalFromNow(FIVE_SECONDS_MS);
-@@ -547,10 +549,19 @@
+-        LOG_DEBUG("Start next execution in 5s, then sleep");
+-        setIntervalFromNow(FIVE_SECONDS_MS);
++        // The position packet is already in the radio's queue, and the preflight check below waits for it to leave,
++        // so there is nothing to wait for here beyond letting this pass finish.
++        LOG_DEBUG("Start next execution in 1s, then sleep");
++        setIntervalFromNow(1000);
+     }
+ 
+     return true;
+@@ -547,10 +551,22 @@ uint32_t PositionModule::effectiveBroadcastIntervalMs(uint32_t configuredInterva
  int32_t PositionModule::runOnce()
  {
      if (sleepOnNextExecution == true) {
@@ -39,8 +36,25 @@
 +            LOG_INFO("Deep sleep vetoed for a whole broadcast interval, stay awake until the next position send");
 +        } else {
 +            LOG_DEBUG("Sleep %ims, then wake to send position", nightyNightMs);
-+            doDeepSleep(nightyNightMs, true, false);
++            // Config, module config and channels are saved whenever they change; only the node database and the
++            // device state move on their own, so save just those rather than all five files (about 4 s of flash).
++            nodeDB->saveToDisk(SEGMENT_NODEDATABASE | SEGMENT_DEVICESTATE);
++            doDeepSleep(nightyNightMs, true, true);
 +        }
      }
  
      const meshtastic_NodeInfoLite *node = nodeDB->getMeshNode(nodeDB->getNodeNum());
+diff --git a/src/modules/PositionModule.h b/src/modules/PositionModule.h
+index 74d486f..0a48477 100644
+--- a/src/modules/PositionModule.h
++++ b/src/modules/PositionModule.h
+@@ -17,6 +17,9 @@ class PositionModule : public ProtobufModule<meshtastic_Position>, private concu
+     /// We limit our GPS broadcasts to a max rate
+     uint32_t lastGpsSend = 0;
+ 
++    /// When a power-saving tracker armed its post-send deep sleep, to bound how long a preflight veto defers it
++    uint32_t sleepArmedMs = 0;
++
+     // Store the latest good lat / long
+     int32_t lastGpsLatitude = 0;
+     int32_t lastGpsLongitude = 0;
