@@ -1,0 +1,132 @@
+diff --git a/src/gps/GPS.cpp b/src/gps/GPS.cpp
+index 4951f69..7cca45c 100644
+--- a/src/gps/GPS.cpp
++++ b/src/gps/GPS.cpp
+@@ -85,6 +85,7 @@ static GPSUpdateScheduling scheduling;
+ /// Multiple GPS instances might use the same serial port (in sequence), but we can
+ /// only init that port once.
+ static bool didSerialInit;
++static bool probeFromCache; // this boot's model came from the probe cache: the receiver was configured on an earlier boot
+ 
+ static struct uBloxGnssModelInfo {
+     char swVersion[30];
+@@ -886,6 +887,7 @@ bool GPS::verifyCachedProbePresence()
+ 
+     detectedBaud = cachedProbeBaud;
+     gnssModel = cachedProbeModel;
++    probeFromCache = true;
+     LOG_INFO("Using cached GPS probe: %s @ %d", cachedProbeModelName, detectedBaud);
+     return true;
+ }
+@@ -942,7 +944,6 @@ bool GPS::setup()
+ 
+         if (gnssModel != GNSS_MODEL_UNKNOWN) {
+             setConnected();
+-            (void)saveProbeCache();
+         } else {
+             return false;
+         }
+@@ -1053,7 +1054,9 @@ bool GPS::setup()
+             delay(250);
+             _serial_gps->write("$CFGMSG,6,1,0\r\n");
+             delay(250);
+-        } else if (IS_ONE_OF(gnssModel, GNSS_MODEL_AG3335, GNSS_MODEL_AG3352)) {
++        } else if (IS_ONE_OF(gnssModel, GNSS_MODEL_AG3335, GNSS_MODEL_AG3352) && !probeFromCache) {
++            // Once only: $PAIR513 below saves this configuration in the receiver's own flash, and $PAIR066 reboots
++            // the receiver, which on a sleepy tracker would restart acquisition on every wake.
+ 
+             if (config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_IN ||
+                 config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_NP_865) {
+@@ -1230,6 +1233,10 @@ bool GPS::setup()
+             delay(250);
+         }
+         didSerialInit = true;
++        // Cache the probe only now that the model configuration went out, since a cached boot skips it; and only
++        // after a real probe, not on every boot.
++        if (!probeFromCache)
++            (void)saveProbeCache();
+     }
+ 
+     notifyDeepSleepObserver.observe(&notifyDeepSleep);
+@@ -1476,15 +1483,23 @@ void GPS::airohaEnterSleep()
+     const char *sleepAck = "$PAIR001,003,0";
+ #endif
+ #ifdef HAS_AIROHA_SOFT_RTC
+-    const uint32_t start = Time::getMillis();
+-    do {
++    // Seeed's own driver: release the awake lock the wake handshake took ($PAIR382,1), then repeat the backup
++    // command at 40 ms intervals without waiting for a reply; a receiver that took it answers nothing more.
++    for (uint8_t i = 0; i < 4; i++) {
++        _serial_gps->write("$PAIR382,0*2F\r\n");
++        delay(AIROHA_SLEEP_ACK_MS);
++    }
++    for (uint8_t i = 0; i < 25; i++) {
+         _serial_gps->write(sleepCmd);
+         if (getACK(sleepAck, AIROHA_SLEEP_ACK_MS) == GNSS_RESPONSE_OK) {
++            LOG_DEBUG("GPS: %.8s acked on attempt %u", sleepCmd, i + 1);
+             airohaSleepMisses = 0;
+             return;
+         }
+-        // Only start another attempt while a whole ack window still fits inside the budget.
+-    } while (Throttle::isWithinTimespanMs(start, AIROHA_SLEEP_BUDGET_MS - AIROHA_SLEEP_ACK_MS));
++    }
++    // No ack is the documented success case too, so do not count it as a miss; the power cut follows anyway.
++    LOG_DEBUG("GPS: %.8s sent 25 times, no ack", sleepCmd);
++    return;
+ #else
+     // No $PAIR382 first: it locks the CPU out of sleep, the opposite of what we want here.
+     for (uint8_t attempt = 0; attempt < AIROHA_SLEEP_ATTEMPTS; attempt++) {
+@@ -1609,6 +1624,20 @@ bool holdJustExpired(uint32_t fixHoldEnds)
+     return fixHoldEnds != 0 && !fixHoldInForce(fixHoldEnds, 0);
+ }
+ 
++#ifndef GPS_SLEEPY_TRACKER_HOLD_MS
++#define GPS_SLEEPY_TRACKER_HOLD_MS 5000
++#endif
++
++/// A power-saving tracker deep-sleeps as soon as its position is out. It still needs a short hold after the first
++/// fix: an AG3335 powered down right at the fix hot-starts no more (36 to 236 s to the next fix on the bench), while
++/// 5 s of hold kept the next fix at 11 to 18 s and 20 s at 9 to 12 s. Fixed length, not tied to gps_update_interval.
++static bool sleepsAfterFix()
++{
++    return config.power.is_power_saving &&
++           IS_ONE_OF(config.device.role, meshtastic_Config_DeviceConfig_Role_TRACKER,
++                     meshtastic_Config_DeviceConfig_Role_TAK_TRACKER);
++}
++
+ /// Should a post-lock ephemeris hold be (re-)armed this cycle? "No hold in force" fires often, since
+ /// every publish clears the hold, including ones that don't put the receiver back to sleep.
+ bool shouldArmFixHold(bool hasValidLocation, uint8_t prevFixQual, uint32_t fixHoldEnds, uint32_t threadIntervalMs)
+@@ -1706,6 +1735,10 @@ int32_t GPS::runOnce()
+             publishUpdate();
+         }
+ 
++        // Decided before any re-arm below: when the thread runs late and a fix sentence lands in the pass the hold
++        // expires in, re-arming first would hide the expiry and run the whole hold a second time.
++        bool holdExpired = holdJustExpired(fixHoldEnds);
++
+         // 2. Got a lock for the first time, or 3. Got a lock after turning back on
+         bool gotLoc = lookForLocation();
+         if (gotLoc) {
+@@ -1718,10 +1751,11 @@ int32_t GPS::runOnce()
+             if (updateInterval <= GPS_UPDATE_ALWAYS_ON_THRESHOLD_MS) {
+                 hasValidLocation = true;
+                 shouldPublish = true;
+-            } else if (shouldArmFixHold(hasValidLocation, prev_fixQual, fixHoldEnds, GPS_THREAD_INTERVAL)) {
++            } else if (!holdExpired && shouldArmFixHold(hasValidLocation, prev_fixQual, fixHoldEnds, GPS_THREAD_INTERVAL)) {
+                 hasValidLocation = true;
+                 // Hold for up to 20secs after getting a lock to download ephemeris etc
+-                uint32_t holdTime = updateInterval - GPS_UPDATE_ALWAYS_ON_THRESHOLD_MS;
++                uint32_t holdTime =
++                    sleepsAfterFix() ? GPS_SLEEPY_TRACKER_HOLD_MS : updateInterval - GPS_UPDATE_ALWAYS_ON_THRESHOLD_MS;
+                 if (holdTime > GPS_FIX_HOLD_MAX_MS)
+                     holdTime = GPS_FIX_HOLD_MAX_MS;
+                 // Same clock the Throttle evaluation reads, and never the "no hold" sentinel.
+@@ -1743,7 +1777,6 @@ int32_t GPS::runOnce()
+         }
+ 
+         // Hold has expired , Search time has expired, we got a time only, or we never needed to hold.
+-        bool holdExpired = holdJustExpired(fixHoldEnds);
+         if (shouldPublish || tooLong || holdExpired) {
+             if (gotTime && hasValidLocation) {
+                 shouldPublish = true;
