@@ -1,0 +1,29 @@
+diff --git a/src/main.cpp b/src/main.cpp
+index 2b553d3..c03acdc 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1131,10 +1131,6 @@ void setup()
+     }
+ #endif
+     nodeDB->notifyPendingLicensedIdentityMigration();
+-#if !MESHTASTIC_EXCLUDE_INPUTBROKER
+-    if (inputBroker)
+-        inputBroker->Init();
+-#endif
+ 
+ #ifdef MESHTASTIC_INCLUDE_NICHE_GRAPHICS
+     // After modules are setup, so we can observe modules
+diff --git a/src/modules/Modules.cpp b/src/modules/Modules.cpp
+index dec52ae..3b698f0 100644
+--- a/src/modules/Modules.cpp
++++ b/src/modules/Modules.cpp
+@@ -136,6 +136,9 @@ void setupModules()
+         inputBroker = new InputBroker();
+         systemCommandsModule = new SystemCommandsModule();
+         buzzerFeedbackThread = new BuzzerFeedbackThread();
++        // Buttons go through the broker, so this comes after it exists; before the remaining modules, so one that
++        // attaches to the user button can do so in its constructor.
++        inputBroker->Init();
+     }
+ #endif
+     statusLEDModule = new StatusLEDModule();
