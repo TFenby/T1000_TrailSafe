@@ -92,12 +92,13 @@ reboots and sends again. With this firmware:
   again after its next position broadcast.
 - **Low battery still wins.** The low-battery shutdown waits at most 30 s for a pending delivery, then shuts down
   anyway.
-- **Each wake is a GPS hot start, and the whole wake is about 25 s.** The GNSS backup supply stays on through the
-  sleep and the receiver is put into backup mode properly (stock Meshtastic's sleep command was refused at nearly
-  every power-down), so it keeps its clock and ephemeris: on the bench the fix came 11–18 s after waking, every
-  cycle, indoors. After the fix the receiver stays on for 5 s (stock: 20 s; with none at all the next fix took
-  36–236 s, so the receiver needs a moment to keep what it learned), the position goes out, and the tracker is
-  asleep about 6 s after the fix (stock: 5 s of waiting plus a 4 s rewrite of all five settings files).
+- **Each wake is a GPS hot start: position sent 10–16 s after waking, asleep about 40 s after.** The GNSS backup
+  supply stays on through the sleep and the receiver is put into backup mode properly (stock Meshtastic's sleep
+  command was refused at nearly every power-down), so it keeps its clock and ephemeris. The position goes out at the
+  fix; the receiver then stays on for 20 s, as in stock, because that is what keeps the next start hot: with the
+  hold removed the next fix took 36–236 s, and shorter holds moved the time into the next wake instead (5 s hold:
+  next fix 11–47 s). After the hold the tracker is asleep within about 6 s (stock: 5 s of waiting plus a 4 s rewrite
+  of all five settings files). About one wake in five is slow anyway (a minute or more to the fix), with any hold.
 
 ## Flashing
 
@@ -134,8 +135,8 @@ The host-side logic test runs without PlatformIO:
 - `patches/0004-…`: T1000-E sleep power: the GNSS backup supply stays on through a timed sleep, as Seeed's own
   firmware keeps it, so the receiver hot-starts on wake; the accelerometer rail and the sensor pins are released
   (`variant_shutdown()`).
-- `patches/0005-…`: GPS, for a power-saving tracker: a 5 s post-fix hold instead of 20 s (`GPS_SLEEPY_TRACKER_HOLD_MS`);
-  the Airoha backup-mode handshake done as Seeed's driver does it (unlock, then the command repeated for up to a
+- `patches/0005-…`: GPS, for a power-saving tracker: a fixed 20 s post-fix hold (`GPS_SLEEPY_TRACKER_HOLD_MS`) instead
+  of one tied to `gps_update_interval`; the Airoha backup-mode handshake done as Seeed's driver does it (unlock, then the command repeated for up to a
   second: the receiver answers about half a second after the unlock, outside upstream's 400 ms budget); a hold that
   expires is no longer re-armed by a fix sentence in the same pass; on a cached probe the receiver is not
   reconfigured again (upstream's `$PAIR066` reboots it on every boot) and the probe cache is written once, not every
