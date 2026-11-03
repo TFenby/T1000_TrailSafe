@@ -83,7 +83,7 @@ After each position broadcast the tracker sleeps with the radio and GPS off for 
 reboots and sends again. With this firmware:
 
 - **A press wakes it.** Pressing the button during the sleep reboots the tracker straight away instead of at the end
-  of the interval. Under two seconds later a single `.` says it is listening, and the presses after that count as
+  of the interval. About a second later a single `.` says it is listening, and the presses after that count as
   usual (two for message 1). A timed wake stays silent and, like a power-on, ignores presses for its first 10 s.
 - **It stays awake until a delivery is resolved.** While a message waits for its acknowledgement it does not sleep:
   up to a minute for a normal message, and for a `!` message until a favorite acks or the resends run out (about two
@@ -131,10 +131,8 @@ The host-side logic test runs without PlatformIO:
 - `patches/0004-…`: T1000-E sleep power: the GNSS backup supply stays on through a timed sleep, as Seeed's own
   firmware keeps it, so the receiver hot-starts on wake; the accelerometer rail and the sensor pins are released
   (`variant_shutdown()`).
-- `patches/0005-…`: the input broker (user button) is initialised as soon as it is created, before the remaining
-  modules, so ButtonMessage can attach to the button and play its ready tone from its constructor.
 
-0002–0005 are general fixes written to be offered upstream.
+0002–0004 are general fixes written to be offered upstream.
 
 Timing defaults (`BUTTON_MESSAGE_*` in `ButtonMessage.h`) can be overridden with `-D` flags in the env ini.
 
