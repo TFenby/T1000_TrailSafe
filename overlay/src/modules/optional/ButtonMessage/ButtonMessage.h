@@ -20,7 +20,7 @@ void setupButtonMessage();
 #define BUTTON_MESSAGE_ACK_TIMEOUT_MS 60000 // normal messages: fail tone when no favorite has acked by then
 #endif
 #ifndef BUTTON_MESSAGE_BOOT_GUARD_MS
-#define BUTTON_MESSAGE_BOOT_GUARD_MS 10000 // ignore presses this long after boot (the power-on press)
+#define BUTTON_MESSAGE_BOOT_GUARD_MS 10000 // ignore presses this long after boot (the power-on press); 0 after a button wake
 #endif
 #ifndef BUTTON_MESSAGE_MAX_TARGETS
 #define BUTTON_MESSAGE_MAX_TARGETS 4
@@ -67,6 +67,7 @@ class ButtonMessageModule : public SinglePortModule, private concurrency::OSThre
     meshtastic_CannedMessageModuleConfig messages = meshtastic_CannedMessageModuleConfig_init_zero;
     char current[sizeof(messages.messages)] = {0}; // text of the message in flight, for resends
     volatile uint8_t pendingClicks = 0;             // set by the button callbacks, possibly in ISR context
+    bool readyTone;                                 // button wake: play '.' once the button is attached
     volatile uint8_t pendingEvents = 0;             // one bit per bm::Event, set by handleReceived
     NodeNum nakNode = 0;
     struct {

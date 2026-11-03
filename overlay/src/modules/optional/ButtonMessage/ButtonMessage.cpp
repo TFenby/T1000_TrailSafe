@@ -29,10 +29,21 @@ static const ToneDuration SENT[] = {{B3, U}, {REST, U}, {B3, U}};               
 static const ToneDuration SENT_CRITICAL[] = {{B3, 3 * U}, {REST, U}, {B3, 3 * U}};               // --
 static const ToneDuration ACKED[] = {{B3, 3 * U}, {REST, U}, {B3, 3 * U}, {REST, U}, {B3, U}};   // --. (G, good)
 static const ToneDuration FAILED[] = {{B3, 7 * U}, {REST, 4 * U}, {B3, 7 * U}}; // two 7-unit tones, ~7 units apart
+static const ToneDuration READY[] = {{B3, U}};                                   // . (woken by the button, listening)
 #define PLAY(m) playTones(m, sizeof(m) / sizeof(m[0]))
 
 extern ButtonThread *UserButtonThread; // defined in input/InputBroker.cpp; no header declares it
 ButtonMessageModule *buttonMessageModule;
+
+// A press ended the tracker's power-saving sleep: there is no power-on press to guard against, so listen at once.
+static bool wokeByButton()
+{
+#ifdef ARCH_NRF52
+    return trackerWakeCause == TRACKER_WAKE_BUTTON;
+#else
+    return false;
+#endif
+}
 
 void setupButtonMessage()
 {
@@ -41,7 +52,9 @@ void setupButtonMessage()
 
 ButtonMessageModule::ButtonMessageModule()
     : SinglePortModule("buttonmsg", meshtastic_PortNum_TEXT_MESSAGE_APP), OSThread("ButtonMessage"),
-      logic(BUTTON_MESSAGE_BOOT_GUARD_MS, BUTTON_MESSAGE_ACK_TIMEOUT_MS, BUTTON_MESSAGE_RETRY_MS, BUTTON_MESSAGE_MAX_ATTEMPTS)
+      logic(wokeByButton() ? 0 : BUTTON_MESSAGE_BOOT_GUARD_MS, BUTTON_MESSAGE_ACK_TIMEOUT_MS, BUTTON_MESSAGE_RETRY_MS,
+            BUTTON_MESSAGE_MAX_ATTEMPTS),
+      readyTone(wokeByButton())
 {
     loadMessages();
     preflightSleepObserver.observe(&preflightSleep);
@@ -107,6 +120,10 @@ int32_t ButtonMessageModule::runOnce()
     if (!moduleConfig.canned_message.enabled)
         return disable();
     attachButton();
+    if (readyTone && UserButtonThread) { // button wake: say that the presses count from now
+        readyTone = false;
+        PLAY(READY);
+    }
     uint32_t now = millis();
 
     uint8_t clicks = pendingClicks;

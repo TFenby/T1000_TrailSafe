@@ -1,14 +1,51 @@
---- a/src/platform/nrf52/main-nrf52.cpp	2026-11-02 15:27:29.263676224 -0500
-+++ b/src/platform/nrf52/main-nrf52.cpp	2026-11-02 15:27:38.780335193 -0500
-@@ -31,6 +31,7 @@
+diff --git a/src/platform/nrf52/main-nrf52.cpp b/src/platform/nrf52/main-nrf52.cpp
+index 3d2ccab..2851e51 100644
+--- a/src/platform/nrf52/main-nrf52.cpp
++++ b/src/platform/nrf52/main-nrf52.cpp
+@@ -31,7 +31,9 @@
  #include "Nrf52SaadcLock.h"
  #include "SPILock.h"
  #include "concurrency/LockGuard.h"
 +#include "concurrency/OSThread.h"
  #include "flash/flash_nrf5x.h"
++#include "sleep.h"
  #include <hal/nrf_lpcomp.h>
  
-@@ -538,7 +539,25 @@
+ #ifdef BQ25703A_ADDR
+@@ -443,6 +445,15 @@ void nrf52Setup()
+     // https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fpower.html
+     LOG_DEBUG("Reset reason: 0x%x", why);
+ 
++    // Left in GPREGRET2 by cpuDeepSleep() before the reset that ends a power-saving tracker's timed sleep. Read
++    // before the SoftDevice is enabled, while the register is still directly accessible.
++    uint8_t wake = NRF_POWER->GPREGRET2;
++    NRF_POWER->GPREGRET2 = 0;
++    if (wake == TRACKER_WAKE_TIMER || wake == TRACKER_WAKE_BUTTON) {
++        trackerWakeCause = (TrackerWakeCause)wake;
++        LOG_DEBUG("Tracker wake cause: %s", wake == TRACKER_WAKE_BUTTON ? "button" : "timer");
++    }
++
+ #ifdef USE_SEMIHOSTING
+     nrf52InitSemiHosting();
+ #endif
+@@ -494,6 +505,16 @@ void nrf52FlashQuiesce()
+     flash_nrf5x_flush();
+ }
+ 
++TrackerWakeCause trackerWakeCause = TRACKER_WAKE_NONE;
++
++// Leave why the sleep ended in GPREGRET2 for the boot after NVIC_SystemReset(). The bootloader and the core only use
++// GPREGRET; the SoftDevice owns the register while it is enabled, so go through it when it is.
++static void setTrackerWakeCause(TrackerWakeCause cause)
++{
++    if (sd_power_gpregret_clr(1, 0xFF) != NRF_SUCCESS || sd_power_gpregret_set(1, cause) != NRF_SUCCESS)
++        NRF_POWER->GPREGRET2 = cause;
++}
++
+ void cpuDeepSleep(uint32_t msecToWake)
+ {
+     // FIXME, configure RTC or button press to wake us
+@@ -538,7 +559,30 @@ void cpuDeepSleep(uint32_t msecToWake)
                     meshtastic_Config_DeviceConfig_Role_TAK_TRACKER, meshtastic_Config_DeviceConfig_Role_SENSOR) &&
           config.power.is_power_saving == true)) {
          sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
@@ -23,14 +60,36 @@
 +        const uint32_t buttonPin = config.device.button_gpio ? config.device.button_gpio : BUTTON_PIN;
 +        const uint32_t sleepStart = millis();
 +        uint32_t remaining;
++        TrackerWakeCause cause = TRACKER_WAKE_TIMER;
 +        while ((remaining = Throttle::remainingMs(sleepStart, msecToWake)) > 0) {
 +            concurrency::mainDelay.delay(remaining);
-+            if (digitalRead(buttonPin) == pressed)
++            if (digitalRead(buttonPin) == pressed) {
++                cause = TRACKER_WAKE_BUTTON;
 +                break;
++            }
 +        }
++        setTrackerWakeCause(cause);
 +#else
          delay(msecToWake);
++        setTrackerWakeCause(TRACKER_WAKE_TIMER);
 +#endif
          NVIC_SystemReset();
      } else {
          // Resume on user button press
+diff --git a/src/sleep.h b/src/sleep.h
+index c62e0e9..72c1606 100644
+--- a/src/sleep.h
++++ b/src/sleep.h
+@@ -19,6 +19,12 @@ bool usbConsoleHostAttached();
+ extern esp_sleep_source_t wakeCause;
+ #endif
+ 
++#ifdef ARCH_NRF52
++/// Why this boot ended a power-saving tracker's timed sleep (cpuDeepSleep reboots out of it); NONE on every other boot
++enum TrackerWakeCause : uint8_t { TRACKER_WAKE_NONE = 0, TRACKER_WAKE_TIMER = 1, TRACKER_WAKE_BUTTON = 2 };
++extern TrackerWakeCause trackerWakeCause;
++#endif
++
+ #ifdef HAS_PMU
+ #include "XPowersLibInterface.hpp"
+ extern XPowersLibInterface *PMU;

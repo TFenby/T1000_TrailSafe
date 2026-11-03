@@ -31,6 +31,7 @@ Morse notation: `.` is one unit, `-` is three. One unit is 80 ms (`BUTTON_MESSAG
 
 | Tone | Meaning |
 |---|---|
+| `.` (E) | awake after a button wake, listening |
 | `..` (I, "info") | message sent |
 | `--` (M, "mayday") | `!` message sent or resent |
 | `--.` (G, for "good") | a favorite received it |
@@ -82,8 +83,8 @@ After each position broadcast the tracker sleeps with the radio and GPS off for 
 reboots and sends again. With this firmware:
 
 - **A press wakes it.** Pressing the button during the sleep reboots the tracker straight away instead of at the end
-  of the interval. The press only wakes it: presses in the first 10 s after boot are ignored, so press again for a
-  message once it is up.
+  of the interval. About a second later a single `.` says it is listening, and the presses after that count as
+  usual (two for message 1). A timed wake stays silent and, like a power-on, ignores presses for its first 10 s.
 - **It stays awake until a delivery is resolved.** While a message waits for its acknowledgement it does not sleep:
   up to a minute for a normal message, and for a `!` message until a favorite acks or the resends run out (about two
   hours). If anything holds the sleep off for a whole broadcast interval, the tracker skips that sleep and tries
@@ -123,7 +124,8 @@ The host-side logic test runs without PlatformIO:
 - `overlay/variants/nrf52840/trailsafe/platformio.ini`: the build environment, extending the stock T1000-E one.
 - `patches/0001-…`: one `#if` line in `src/main.cpp` so the firmware reports the canned-message settings as
   available, which makes the phone apps show the editor for a screenless device.
-- `patches/0002-…`: nRF52 power-saving tracker sleep ends on a button press.
+- `patches/0002-…`: nRF52 power-saving tracker sleep ends on a button press, and the boot that follows knows whether
+  the button or the timer ended it (`trackerWakeCause`, kept in a retained register across the reset).
 - `patches/0003-…`: the tracker's post-broadcast sleep waits while the radio or a module (ButtonMessage, awaiting an
   ack) vetoes it, bounded by one broadcast interval.
 - `patches/0004-…`: T1000-E sleep power: the GNSS backup supply stays on through a timed sleep, as Seeed's own
