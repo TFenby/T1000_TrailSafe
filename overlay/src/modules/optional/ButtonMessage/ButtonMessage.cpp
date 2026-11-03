@@ -53,8 +53,7 @@ void setupButtonMessage()
 ButtonMessageModule::ButtonMessageModule()
     : SinglePortModule("buttonmsg", meshtastic_PortNum_TEXT_MESSAGE_APP), OSThread("ButtonMessage"),
       logic(wokeByButton() ? 0 : BUTTON_MESSAGE_BOOT_GUARD_MS, BUTTON_MESSAGE_ACK_TIMEOUT_MS, BUTTON_MESSAGE_RETRY_MS,
-            BUTTON_MESSAGE_MAX_ATTEMPTS),
-      readyTone(wokeByButton())
+            BUTTON_MESSAGE_MAX_ATTEMPTS)
 {
     loadMessages();
     preflightSleepObserver.observe(&preflightSleep);
@@ -63,6 +62,14 @@ ButtonMessageModule::ButtonMessageModule()
     } else {
         LOG_INFO("ButtonMessage disabled (canned_message.enabled is false)");
         disable();
+        return;
+    }
+    // Button wake: the button thread already exists (InputBroker is set up before the optional modules), so attach
+    // now and say that the presses count from here, rather than after the rest of setup.
+    if (wokeByButton() && UserButtonThread) {
+        attachButton();
+        LOG_INFO("ButtonMessage: woken by the button, listening");
+        PLAY(READY);
     }
 }
 
@@ -120,10 +127,6 @@ int32_t ButtonMessageModule::runOnce()
     if (!moduleConfig.canned_message.enabled)
         return disable();
     attachButton();
-    if (readyTone && UserButtonThread) { // button wake: say that the presses count from now
-        readyTone = false;
-        PLAY(READY);
-    }
     uint32_t now = millis();
 
     uint8_t clicks = pendingClicks;

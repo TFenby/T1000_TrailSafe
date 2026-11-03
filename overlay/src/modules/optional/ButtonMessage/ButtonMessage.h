@@ -67,7 +67,6 @@ class ButtonMessageModule : public SinglePortModule, private concurrency::OSThre
     meshtastic_CannedMessageModuleConfig messages = meshtastic_CannedMessageModuleConfig_init_zero;
     char current[sizeof(messages.messages)] = {0}; // text of the message in flight, for resends
     volatile uint8_t pendingClicks = 0;             // set by the button callbacks, possibly in ISR context
-    bool readyTone;                                 // button wake: play '.' once the button is attached
     volatile uint8_t pendingEvents = 0;             // one bit per bm::Event, set by handleReceived
     NodeNum nakNode = 0;
     struct {
