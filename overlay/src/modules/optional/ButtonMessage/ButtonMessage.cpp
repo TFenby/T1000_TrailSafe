@@ -65,17 +65,16 @@ ButtonMessageModule::ButtonMessageModule()
         return;
     }
     readyTone = wokeByButton();
-    sayReady();
 }
 
-// Button wake: once the button is attached, say that the presses count from here. The button thread is created by
-// inputBroker->Init() after setupModules(), so this normally first succeeds in runOnce(), after the rest of setup.
+// Button wake: say that the presses count from here. Presses before this point sat unprocessed in the button state
+// machine (the first pass of the main loop blocks for seconds on the GPS probe and the Bluetooth init); drop them so
+// they cannot merge with the ones that follow the tone.
 void ButtonMessageModule::sayReady()
 {
-    if (!readyTone || !UserButtonThread)
-        return;
     readyTone = false;
-    attachButton();
+    UserButtonThread->userButton.reset();
+    pendingClicks = 0;
     LOG_INFO("ButtonMessage: woken by the button, listening");
     PLAY(READY);
 }
@@ -134,7 +133,13 @@ int32_t ButtonMessageModule::runOnce()
     if (!moduleConfig.canned_message.enabled)
         return disable();
     attachButton();
-    sayReady();
+    if (readyTone && UserButtonThread) {
+        // Not on the first pass of the main loop: it still has multi-second one-off work ahead of it (GPS probe,
+        // Bluetooth init) during which the button thread is not serviced. The second pass means the loop cycles.
+        if (++readyPass < 2)
+            return 1;
+        sayReady();
+    }
     uint32_t now = millis();
 
     uint8_t clicks = pendingClicks;

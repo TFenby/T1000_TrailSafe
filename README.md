@@ -83,8 +83,9 @@ After each position broadcast the tracker sleeps with the radio and GPS off for 
 reboots and sends again. With this firmware:
 
 - **A press wakes it.** Pressing the button during the sleep reboots the tracker straight away instead of at the end
-  of the interval. About a second later a single `.` says it is listening, and the presses after that count as
-  usual (two for message 1). A timed wake stays silent and, like a power-on, ignores presses for its first 10 s.
+  of the interval. Once it is fully up, about 6 s later, a single `.` says it is listening: presses before the tone
+  are dropped, and the presses after it count as usual (two for message 1). A timed wake stays silent and, like a
+  power-on, ignores presses for its first 10 s.
 - **It stays awake until a delivery is resolved.** While a message waits for its acknowledgement it does not sleep:
   up to a minute for a normal message, and for a `!` message until a favorite acks or the resends run out (about two
   hours). If anything holds the sleep off for a whole broadcast interval, the tracker skips that sleep and tries
