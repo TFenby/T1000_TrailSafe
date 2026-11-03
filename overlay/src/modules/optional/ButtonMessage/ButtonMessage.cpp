@@ -64,13 +64,20 @@ ButtonMessageModule::ButtonMessageModule()
         disable();
         return;
     }
-    // Button wake: the button thread already exists (InputBroker is set up before the optional modules), so attach
-    // now and say that the presses count from here, rather than after the rest of setup.
-    if (wokeByButton() && UserButtonThread) {
-        attachButton();
-        LOG_INFO("ButtonMessage: woken by the button, listening");
-        PLAY(READY);
-    }
+    readyTone = wokeByButton();
+    sayReady();
+}
+
+// Button wake: once the button is attached, say that the presses count from here. The button thread is created by
+// inputBroker->Init() after setupModules(), so this normally first succeeds in runOnce(), after the rest of setup.
+void ButtonMessageModule::sayReady()
+{
+    if (!readyTone || !UserButtonThread)
+        return;
+    readyTone = false;
+    attachButton();
+    LOG_INFO("ButtonMessage: woken by the button, listening");
+    PLAY(READY);
 }
 
 void ButtonMessageModule::loadMessages()
@@ -127,6 +134,7 @@ int32_t ButtonMessageModule::runOnce()
     if (!moduleConfig.canned_message.enabled)
         return disable();
     attachButton();
+    sayReady();
     uint32_t now = millis();
 
     uint8_t clicks = pendingClicks;
