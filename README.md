@@ -90,6 +90,11 @@ reboots and sends again. With this firmware:
   again after its next position broadcast.
 - **Low battery still wins.** The low-battery shutdown waits at most 30 s for a pending delivery, then shuts down
   anyway.
+- **Each wake is a GPS hot start.** The GNSS backup supply stays on through the sleep, so the receiver keeps its clock
+  and ephemeris: on the bench it had a fix 1–9 s after waking, every cycle. Stock Meshtastic then keeps the GPS on for
+  another 20 s to refresh the ephemeris before it publishes, so a wake cycle is about 35 s awake. Setting
+  `position.gps_update_interval` to 15 shortens that hold to 5 s, and 10 or less drops it; the price is an occasional
+  slower warm start once the stored ephemeris ages out after a few hours. Not measured here.
 
 ## Flashing
 
@@ -121,8 +126,9 @@ The host-side logic test runs without PlatformIO:
 - `patches/0002-…`: nRF52 power-saving tracker sleep ends on a button press.
 - `patches/0003-…`: the tracker's post-broadcast sleep waits while the radio or a module (ButtonMessage, awaiting an
   ack) vetoes it, bounded by one broadcast interval.
-- `patches/0004-…`: T1000-E sleep power: the GNSS backup supply stays on through a timed sleep for a hot start, and the
-  accelerometer rail and the sensor pins are released (`variant_shutdown()`).
+- `patches/0004-…`: T1000-E sleep power: the GNSS backup supply stays on through a timed sleep, as Seeed's own
+  firmware keeps it, so the receiver hot-starts on wake; the accelerometer rail and the sensor pins are released
+  (`variant_shutdown()`).
 
 0002–0004 are general fixes written to be offered upstream.
 
