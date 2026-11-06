@@ -83,7 +83,7 @@ After each position broadcast the tracker sleeps with the radio and GPS off for 
 reboots and sends again. With this firmware:
 
 - **A press wakes it.** Pressing the button during the sleep reboots the tracker straight away instead of at the end
-  of the interval. Once it is fully up, about 6 s later, a single `.` says it is listening: presses before the tone
+  of the interval. Once it is fully up, 2 to 5 s later, a single `.` says it is listening: presses before the tone
   are dropped, and the presses after it count as usual (two for message 1). A timed wake stays silent and, like a
   power-on, ignores presses for its first 10 s.
 - **It stays awake until a delivery is resolved.** While a message waits for its acknowledgement it does not sleep:
@@ -141,8 +141,11 @@ The host-side logic test runs without PlatformIO:
   expires is no longer re-armed by a fix sentence in the same pass; on a cached probe the receiver is not
   reconfigured again (upstream's `$PAIR066` reboots it on every boot) and the probe cache is written once, not every
   boot.
+- `patches/0006-…`: the node database is no longer rewritten at every boot. Upstream's changed-at-boot check CRCs a
+  struct of `std::vector`s (their pointers, not the nodes) before a self-care pass that reallocates the vector, so it
+  always saw a change; the check now runs after self-care.
 
-0002–0004 are general fixes written to be offered upstream.
+0002–0004 and 0006 are general fixes written to be offered upstream.
 
 Timing defaults (`BUTTON_MESSAGE_*` in `ButtonMessage.h`) can be overridden with `-D` flags in the env ini. Bench
 builds can add `-DBUTTON_MESSAGE_FAKE_WAKE` (a timed wake behaves like a button wake) and

@@ -1,0 +1,23 @@
+diff --git a/src/mesh/NodeDB.cpp b/src/mesh/NodeDB.cpp
+index e63e90a..9e19cba 100644
+--- a/src/mesh/NodeDB.cpp
++++ b/src/mesh/NodeDB.cpp
+@@ -485,7 +485,6 @@ NodeDB::NodeDB()
+     cleanupMeshDB();
+ 
+     uint32_t devicestateCRC = crc32Buffer(&devicestate, sizeof(devicestate));
+-    uint32_t nodeDatabaseCRC = crc32Buffer(&nodeDatabase, sizeof(nodeDatabase));
+     uint32_t configCRC = crc32Buffer(&config, sizeof(config));
+     uint32_t channelFileCRC = crc32Buffer(&channelFile, sizeof(channelFile));
+ 
+@@ -547,6 +546,10 @@ NodeDB::NodeDB()
+     // loadFromDisk() deliberately left untrimmed: confirm self, trim/demote only
+     // non-self overflow, pin self to index 0, rewrite once if healed.
+     nodeDBSelfCare();
++    // nodeDatabase holds std::vectors, so this CRC covers their pointers, not the nodes. Taken after self-care, whose
++    // resize() reallocates the node vector on every boot and which saves on its own when it heals the store; taken
++    // before it, the compare below always differed and nodes.proto was rewritten at every boot.
++    uint32_t nodeDatabaseCRC = crc32Buffer(&nodeDatabase, sizeof(nodeDatabase));
+ 
+     // If we migrated from legacy during loadFromDisk(), persist the migrated DB
+     // only after identity and self-care are established.
