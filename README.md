@@ -80,7 +80,8 @@ For long battery life, use the stock tracker power saving:
     meshtastic --set device.role TRACKER --set power.is_power_saving true --set position.position_broadcast_secs 900
 
 After each position broadcast the tracker sleeps with the radio and GPS off for `position_broadcast_secs`, then
-reboots and sends again. With this firmware:
+reboots and sends again. Everything below follows those two settings (`device.role` and `power.is_power_saving`)
+and switches off with them; there is nothing extra to configure or rebuild. With this firmware:
 
 - **A press wakes it.** Pressing the button during the sleep reboots the tracker straight away instead of at the end
   of the interval. Once it is fully up, 2 to 5 s later, a single `.` says it is listening: presses before the tone
@@ -95,10 +96,12 @@ reboots and sends again. With this firmware:
 - **Each wake is a GPS hot start: position sent 10–16 s after waking, asleep about 40 s after.** The GNSS backup
   supply stays on through the sleep and the receiver is put into backup mode properly (stock Meshtastic's sleep
   command was refused at nearly every power-down), so it keeps its clock and ephemeris. The position goes out at the
-  fix; the receiver then stays on for 20 s, as in stock, because that is what keeps the next start hot: with the
-  hold removed the next fix took 36–236 s, and shorter holds moved the time into the next wake instead (5 s hold:
-  next fix 11–47 s). After the hold the tracker is asleep within about 6 s (stock: 5 s of waiting plus a 4 s rewrite
-  of all five settings files). About one wake in five is slow anyway (a minute or more to the fix), with any hold.
+  fix; the receiver then stays on for the stock post-fix hold (20 s with the default `position.gps_update_interval`;
+  stock derives it as `gps_update_interval` minus 10 s, capped at 20 s), because that is what keeps the next start
+  hot: with the hold removed the next fix took 36–236 s, and shorter holds moved the time into the next wake instead
+  (5 s hold: next fix 11–47 s). After the hold the tracker is asleep within about 6 s (stock: 5 s of waiting plus a
+  4 s rewrite of all five settings files). About one wake in five is slow anyway (a minute or more to the fix), with
+  any hold.
 
 ## Flashing
 
@@ -135,12 +138,11 @@ The host-side logic test runs without PlatformIO:
 - `patches/0004-…`: T1000-E sleep power: the GNSS backup supply stays on through a timed sleep, as Seeed's own
   firmware keeps it, so the receiver hot-starts on wake; the accelerometer rail and the sensor pins are released
   (`variant_shutdown()`).
-- `patches/0005-…`: GPS, for a power-saving tracker: a fixed 20 s post-fix hold (`GPS_SLEEPY_TRACKER_HOLD_MS`) instead
-  of one tied to `gps_update_interval`; the Airoha backup-mode handshake done as Seeed's driver does it (unlock, then the command repeated for up to a
-  second: the receiver answers about half a second after the unlock, outside upstream's 400 ms budget); a hold that
-  expires is no longer re-armed by a fix sentence in the same pass; on a cached probe the receiver is not
-  reconfigured again (upstream's `$PAIR066` reboots it on every boot) and the probe cache is written once, not every
-  boot.
+- `patches/0005-…`: GPS: the Airoha backup-mode handshake done as Seeed's driver does it (unlock, then the command
+  repeated for up to a second: the receiver answers about half a second after the unlock, outside upstream's 400 ms
+  budget); a post-fix hold that expires is no longer re-armed by a fix sentence in the same pass; on a cached probe
+  the receiver is not reconfigured again (upstream's `$PAIR066` reboots it on every boot) and the probe cache is
+  written once, not every boot.
 - `patches/0006-…`: the node database is no longer rewritten at every boot. Upstream's changed-at-boot check CRCs a
   struct of `std::vector`s (their pointers, not the nodes) before a self-care pass that reallocates the vector, so it
   always saw a change; the check now runs after self-care.

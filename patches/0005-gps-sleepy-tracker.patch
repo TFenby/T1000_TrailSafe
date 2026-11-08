@@ -1,5 +1,5 @@
 diff --git a/src/gps/GPS.cpp b/src/gps/GPS.cpp
-index 4951f69..e2391ee 100644
+index 4951f69..313cce4 100644
 --- a/src/gps/GPS.cpp
 +++ b/src/gps/GPS.cpp
 @@ -85,6 +85,7 @@ static GPSUpdateScheduling scheduling;
@@ -76,29 +76,7 @@ index 4951f69..e2391ee 100644
  #else
      // No $PAIR382 first: it locks the CPU out of sleep, the opposite of what we want here.
      for (uint8_t attempt = 0; attempt < AIROHA_SLEEP_ATTEMPTS; attempt++) {
-@@ -1609,6 +1624,21 @@ bool holdJustExpired(uint32_t fixHoldEnds)
-     return fixHoldEnds != 0 && !fixHoldInForce(fixHoldEnds, 0);
- }
- 
-+#ifndef GPS_SLEEPY_TRACKER_HOLD_MS
-+#define GPS_SLEEPY_TRACKER_HOLD_MS GPS_FIX_HOLD_MAX_MS
-+#endif
-+
-+/// A power-saving tracker deep-sleeps as soon as its position is out, so its hold is a fixed length rather than
-+/// gps_update_interval minus 10 s. It is not optional: an AG3335 powered down right at the fix hot-starts no more
-+/// (36 to 236 s to the next fix on the bench). Shorter holds move the time into the next wake's fix instead (5 s hold:
-+/// next fix 11 to 47 s; 20 s: 10 to 16 s), and the position goes out at the fix, so the full hold wins on latency.
-+static bool sleepsAfterFix()
-+{
-+    return config.power.is_power_saving &&
-+           IS_ONE_OF(config.device.role, meshtastic_Config_DeviceConfig_Role_TRACKER,
-+                     meshtastic_Config_DeviceConfig_Role_TAK_TRACKER);
-+}
-+
- /// Should a post-lock ephemeris hold be (re-)armed this cycle? "No hold in force" fires often, since
- /// every publish clears the hold, including ones that don't put the receiver back to sleep.
- bool shouldArmFixHold(bool hasValidLocation, uint8_t prevFixQual, uint32_t fixHoldEnds, uint32_t threadIntervalMs)
-@@ -1706,6 +1736,10 @@ int32_t GPS::runOnce()
+@@ -1706,6 +1721,10 @@ int32_t GPS::runOnce()
              publishUpdate();
          }
  
@@ -109,7 +87,7 @@ index 4951f69..e2391ee 100644
          // 2. Got a lock for the first time, or 3. Got a lock after turning back on
          bool gotLoc = lookForLocation();
          if (gotLoc) {
-@@ -1718,10 +1752,11 @@ int32_t GPS::runOnce()
+@@ -1718,7 +1737,7 @@ int32_t GPS::runOnce()
              if (updateInterval <= GPS_UPDATE_ALWAYS_ON_THRESHOLD_MS) {
                  hasValidLocation = true;
                  shouldPublish = true;
@@ -117,13 +95,8 @@ index 4951f69..e2391ee 100644
 +            } else if (!holdExpired && shouldArmFixHold(hasValidLocation, prev_fixQual, fixHoldEnds, GPS_THREAD_INTERVAL)) {
                  hasValidLocation = true;
                  // Hold for up to 20secs after getting a lock to download ephemeris etc
--                uint32_t holdTime = updateInterval - GPS_UPDATE_ALWAYS_ON_THRESHOLD_MS;
-+                uint32_t holdTime =
-+                    sleepsAfterFix() ? GPS_SLEEPY_TRACKER_HOLD_MS : updateInterval - GPS_UPDATE_ALWAYS_ON_THRESHOLD_MS;
-                 if (holdTime > GPS_FIX_HOLD_MAX_MS)
-                     holdTime = GPS_FIX_HOLD_MAX_MS;
-                 // Same clock the Throttle evaluation reads, and never the "no hold" sentinel.
-@@ -1743,7 +1778,6 @@ int32_t GPS::runOnce()
+                 uint32_t holdTime = updateInterval - GPS_UPDATE_ALWAYS_ON_THRESHOLD_MS;
+@@ -1743,7 +1762,6 @@ int32_t GPS::runOnce()
          }
  
          // Hold has expired , Search time has expired, we got a time only, or we never needed to hold.
